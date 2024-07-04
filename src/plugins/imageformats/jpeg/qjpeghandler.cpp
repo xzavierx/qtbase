@@ -586,6 +586,9 @@ static bool do_write_jpeg_image(struct jpeg_compress_struct &cinfo,
 
         jpeg_set_defaults(&cinfo);
 
+        cinfo.comp_info[0].v_samp_factor = 1;
+        cinfo.comp_info[0].h_samp_factor = 1;
+
         qreal diffInch = qAbs(image.dotsPerMeterX()*2.54/100. - qRound(image.dotsPerMeterX()*2.54/100.))
                          + qAbs(image.dotsPerMeterY()*2.54/100. - qRound(image.dotsPerMeterY()*2.54/100.));
         qreal diffCm = (qAbs(image.dotsPerMeterX()/100. - qRound(image.dotsPerMeterX()/100.))

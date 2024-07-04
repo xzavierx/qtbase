@@ -2167,7 +2167,8 @@ bool QOpenGL2PaintEngineEx::begin(QPaintDevice *pdev)
 
     d->device->ensureActiveTarget();
 
-    if (d->device->context() != QOpenGLContext::currentContext() || !d->device->context()) {
+    if (!QOpenGLContext::currentContext() || d->device->context() != QOpenGLContext::currentContext()
+        || !d->device->context()) {
         qWarning("QPainter::begin(): QOpenGLPaintDevice's context needs to be current");
         return false;
     }

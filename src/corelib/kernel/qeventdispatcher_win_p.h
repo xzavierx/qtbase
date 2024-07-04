@@ -54,6 +54,7 @@
 #include "QtCore/qabstracteventdispatcher.h"
 #include "QtCore/qt_windows.h"
 #include "QtCore/qhash.h"
+#include "QtCore/qmutex.h"
 
 #include "qabstracteventdispatcher_p.h"
 
@@ -140,6 +141,7 @@ struct WinTimerInfo {                           // internal timer info
     QObject *obj;                               // - object to receive events
     bool inTimerEvent;
     UINT fastTimerId;
+    QMutex fastTimerMutex;
 };
 
 class QZeroTimerEvent : public QTimerEvent

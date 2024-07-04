@@ -62,6 +62,7 @@
 QT_BEGIN_NAMESPACE
 
 static const DWORD VENDOR_ID_AMD = 0x1002;
+static const DWORD VENDOR_ID_INTEL = 0x8086;
 
 static GpuDescription adapterIdentifierToGpuDescription(const D3DADAPTER_IDENTIFIER9 &adapterIdentifier)
 {
@@ -142,30 +143,41 @@ GpuDescription GpuDescription::detect()
         isAMD = result.vendorId == VENDOR_ID_AMD;
     }
 
+    bool isIntel = (result.vendorId == VENDOR_ID_INTEL);
+    bool hasAMD = isAMD;
+    bool hasIntel = isIntel;
+
     // Detect QTBUG-50371 (having AMD as the default adapter results in a crash
     // when starting apps on a screen connected to the Intel card) by looking
     // for a default AMD adapter and an additional non-AMD one.
-    if (isAMD) {
+	if (true || isAMD) {
         const UINT adapterCount = direct3D9.adapterCount();
         for (UINT adp = 1; adp < adapterCount; ++adp) {
-            if (direct3D9.retrieveAdapterIdentifier(adp, &adapterIdentifier)
-                && adapterIdentifier.VendorId != VENDOR_ID_AMD) {
-                // Bingo. Now figure out the display for the AMD card.
-                DISPLAY_DEVICE dd;
-                memset(&dd, 0, sizeof(dd));
-                dd.cb = sizeof(dd);
-                for (int dev = 0; EnumDisplayDevices(nullptr, dev, &dd, 0); ++dev) {
-                    if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) {
-                        // DeviceName is something like \\.\DISPLAY1 which can be used to
-                        // match with the MONITORINFOEX::szDevice queried by QWindowsScreen.
-                        result.gpuSuitableScreen = QString::fromWCharArray(dd.DeviceName);
-                        break;
+            if (direct3D9.retrieveAdapterIdentifier(adp, &adapterIdentifier)) {
+                if (isAMD && adapterIdentifier.VendorId != VENDOR_ID_AMD) {
+                    // Bingo. Now figure out the display for the AMD card.
+                    DISPLAY_DEVICE dd;
+                    memset(&dd, 0, sizeof(dd));
+                    dd.cb = sizeof(dd);
+                    for (int dev = 0; EnumDisplayDevices(nullptr, dev, &dd, 0); ++dev) {
+                        if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) {
+                            // DeviceName is something like \\.\DISPLAY1 which can be used to
+                            // match with the MONITORINFOEX::szDevice queried by QWindowsScreen.
+                            result.gpuSuitableScreen = QString::fromWCharArray(dd.DeviceName);
+                            break;
+                        }
                     }
                 }
-                break;
+                if (adapterIdentifier.VendorId == VENDOR_ID_AMD) {
+                    hasAMD = true;
+                } else if (adapterIdentifier.VendorId == VENDOR_ID_INTEL) {
+                    hasIntel = true;
+                }
             }
         }
     }
+
+    result.amdSwitchable = hasAMD && hasIntel;
 
     return result;
 }
@@ -307,6 +319,7 @@ QWindowsOpenGLTester::Renderers QWindowsOpenGLTester::detectSupportedRenderers(c
     return 0;
 #else
     QOpenGLConfig::Gpu qgpu = QOpenGLConfig::Gpu::fromDevice(gpu.vendorId, gpu.deviceId, gpu.driverVersion, gpu.description);
+    qgpu.amdSwitchable = gpu.amdSwitchable;
     SupportedRenderersCache *srCache = supportedRenderersCache();
     SupportedRenderersCache::const_iterator it = srCache->constFind(qgpu);
     if (it != srCache->cend())

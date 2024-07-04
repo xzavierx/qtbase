@@ -1348,7 +1348,7 @@
         },
         "opengl-dynamic": {
             "label": "Dynamic OpenGL",
-            "disable": "input.angle == 'yes' || input.opengl == 'no' || input.opengl == 'desktop'",
+            "disable": "input.angle == 'yes' || input.opengl == 'no' || input.opengl == 'desktop' || input.opengl == 'es2'",
             "condition": "config.win32 && !config.winrt",
             "output": [
                 { "type": "publicFeature", "name": "dynamicgl" },

@@ -1357,6 +1357,7 @@ bool QImageReader::read(QImage *image)
     if (autoTransform())
         qt_imageTransform(*image, transformation());
 
+    image->convertToColorSpace(QColorSpace::SRgb);
     return true;
 }
 

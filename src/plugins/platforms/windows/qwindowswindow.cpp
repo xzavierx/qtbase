@@ -399,7 +399,7 @@ bool QWindowsWindow::setWindowLayered(HWND hwnd, Qt::WindowFlags flags, bool has
 {
     const LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
     const bool needsLayered = (flags & Qt::WindowTransparentForInput)
-        || (hasAlpha && (flags & Qt::FramelessWindowHint)) || opacity < 1.0;
+        || (hasAlpha) || opacity < 1.0;
     const bool isLayered = (exStyle & WS_EX_LAYERED);
     if (needsLayered != isLayered) {
         if (needsLayered) {
@@ -415,7 +415,7 @@ static void setWindowOpacity(HWND hwnd, Qt::WindowFlags flags, bool hasAlpha, bo
 {
     if (QWindowsWindow::setWindowLayered(hwnd, flags, hasAlpha, level)) {
         const BYTE alpha = BYTE(qRound(255.0 * level));
-        if (hasAlpha && !accelerated && (flags & Qt::FramelessWindowHint)) {
+        if (hasAlpha && !accelerated) {
             // Non-GL windows with alpha: Use blend function to update.
             BLENDFUNCTION blend = {AC_SRC_OVER, 0, alpha, AC_SRC_ALPHA};
             UpdateLayeredWindow(hwnd, nullptr, nullptr, nullptr, nullptr, nullptr, 0, &blend, ULW_ALPHA);
@@ -569,7 +569,7 @@ static QPoint calcPosition(const QWindow *w, const QWindowCreationContextPtr &co
 {
     const QPoint orgPos(context->frameX - invMargins.left(), context->frameY - invMargins.top());
 
-    if (!w || (!w->isTopLevel() && w->surfaceType() != QWindow::OpenGLSurface))
+    if (!w || w->type() != Qt::Window)
         return orgPos;
 
     // Workaround for QTBUG-50371

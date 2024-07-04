@@ -1223,7 +1223,8 @@ bool QWindowsContext::windowsProc(HWND hwnd, UINT message,
         if (QWindowsTheme *t = QWindowsTheme::instance())
             t->displayChanged();
         QWindowsWindow::displayChanged();
-        return d->m_screenManager.handleDisplayChange(wParam, lParam);
+        d->m_screenManager.handleScreenChanges();
+        return false;
     case QtWindows::SettingChangedEvent: {
         QWindowsWindow::settingsChanged();
         const bool darkMode = QWindowsTheme::queryDarkMode();
@@ -1448,7 +1449,7 @@ bool QWindowsContext::windowsProc(HWND hwnd, UINT message,
         // WM_DPICHANGED is sent with a size that avoids resize loops (by
         // snapping back to the previous screen, see QTBUG-65580).
         const bool doResize = resizeOnDpiChanged(platformWindow->window());
-        if (doResize) {
+        if (doResize && !platformWindow->testFlag(QWindowsWindow::WithinSetGeometry)) {
             platformWindow->setFlag(QWindowsWindow::WithinDpiChanged);
             platformWindow->updateFullFrameMargins();
             const auto prcNewWindow = reinterpret_cast<RECT *>(lParam);

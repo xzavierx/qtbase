@@ -4961,6 +4961,17 @@ void QWidget::render(QPainter *painter, const QPoint &targetOffset,
         return; // Fully transparent.
 
     Q_D(QWidget);
+
+    // Patch: save and restore dirtyOpaqueChildren field.
+    //
+    // Just like in QWidget::grab() this field should be restored
+    // after the d->render() call, because it will be set to 1 and
+    // opaqueChildren field will be filled with empty region in
+    // case the widget is hidden (because all the opaque children
+    // will be skipped in isVisible() check).
+    //
+    const bool oldDirtyOpaqueChildren = d->dirtyOpaqueChildren;
+
     const bool inRenderWithPainter = d->extra && d->extra->inRenderWithPainter;
     const QRegion toBePainted = !inRenderWithPainter ? d->prepareToRender(sourceRegion, renderFlags)
                                                      : sourceRegion;
@@ -4982,6 +4993,10 @@ void QWidget::render(QPainter *painter, const QPoint &targetOffset,
     if (!inRenderWithPainter && (opacity < 1.0 || (target->devType() == QInternal::Printer))) {
         d->render_helper(painter, targetOffset, toBePainted, renderFlags);
         d->extra->inRenderWithPainter = inRenderWithPainter;
+
+        // Patch: save and restore dirtyOpaqueChildren field.
+        d->dirtyOpaqueChildren = oldDirtyOpaqueChildren;
+
         return;
     }
 
@@ -5014,6 +5029,9 @@ void QWidget::render(QPainter *painter, const QPoint &targetOffset,
     d->setSharedPainter(oldPainter);
 
     d->extra->inRenderWithPainter = inRenderWithPainter;
+
+    // Patch: save and restore dirtyOpaqueChildren field.
+    d->dirtyOpaqueChildren = oldDirtyOpaqueChildren;
 }
 
 static void sendResizeEvents(QWidget *target)

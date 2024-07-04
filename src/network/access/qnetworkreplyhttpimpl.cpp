@@ -2225,6 +2225,9 @@ void QNetworkReplyHttpImplPrivate::_q_finished()
 void QNetworkReplyHttpImplPrivate::finished()
 {
     Q_Q(QNetworkReplyHttpImpl);
+
+    QPointer<QNetworkReplyHttpImpl> guard = q;
+
     if (transferTimeout)
       transferTimeout->stop();
     if (state == Finished || state == Aborted || state == WaitingForSession)
@@ -2256,6 +2259,8 @@ void QNetworkReplyHttpImplPrivate::finished()
     }
 #endif
 
+    if (!guard) return;
+
     // if we don't know the total size of or we received everything save the cache
     if (totalSize.isNull() || totalSize == -1 || bytesDownloaded == totalSize)
         completeCacheSave();
@@ -2264,6 +2269,8 @@ void QNetworkReplyHttpImplPrivate::finished()
     // get the HTTP redirect status code (301, 303 etc)
     if (isHttpRedirectResponse() && errorCode == QNetworkReply::NoError)
         return;
+
+    if (!guard) return;
 
     state = Finished;
     q->setFinished(true);

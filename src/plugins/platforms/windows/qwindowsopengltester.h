@@ -65,6 +65,8 @@ struct GpuDescription
     QByteArray driverName;
     QByteArray description;
     QString gpuSuitableScreen;
+
+    bool amdSwitchable = false;
 };
 
 #ifndef QT_NO_DEBUG_STREAM

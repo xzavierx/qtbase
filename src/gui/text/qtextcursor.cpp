@@ -510,6 +510,9 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
         const int len = blockIt.length() - 1;
         if (relativePos >= len)
             return false;
+        // Patch: Improved apostrophe processing.
+        relativePos = engine->toEdge(relativePos, len, true);
+#if 0
         if (engine->atWordSeparator(relativePos)) {
             ++relativePos;
             while (relativePos < len && engine->atWordSeparator(relativePos))
@@ -518,6 +521,7 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
             while (relativePos < len && !attributes[relativePos].whiteSpace && !engine->atWordSeparator(relativePos))
                 ++relativePos;
         }
+#endif
         newPosition = blockIt.position() + relativePos;
         break;
     }

@@ -1395,6 +1395,52 @@ static void applyVisibilityRules(ushort ucs, QGlyphLayout *glyphs, uint glyphPos
     }
 }
 
+// Attempt to work around assertion violation in harfbuzz text shaping.
+// See https://bugreports.qt.io/browse/QTBUG-89155.
+// See 'hb_bool_t is_default_ignorable' in hb-unicode-private.hh
+static inline bool IsDefaultIgnorable(uint ch) {
+    const auto plane = ch >> 16;
+    const auto inrange = [](uint ch, uint from, uint till) {
+        return uint(ch - from) <= uint(till - from);
+    };
+    if (plane == 0) {
+        /* BMP */
+        const auto page = ch >> 8;
+        switch (page) {
+        case 0x00:
+            return (ch == 0x00ADu);
+        case 0x03:
+            return (ch == 0x034Fu);
+        case 0x06:
+            return (ch == 0x061Cu);
+        case 0x17:
+            return inrange(ch, 0x17B4u, 0x17B5u);
+        case 0x18:
+            return inrange(ch, 0x180Bu, 0x180Eu);
+        case 0x20:
+            return inrange(ch, 0x200Bu, 0x200Fu)
+                    || inrange(ch, 0x202Au, 0x202Eu)
+                    || inrange(ch, 0x2060u, 0x206Fu);
+        case 0xFE:
+            return inrange(ch, 0xFE00u, 0xFE0Fu) || ch == 0xFEFFu;
+        case 0xFF:
+            return inrange(ch, 0xFFF0u, 0xFFF8u);
+        default:
+            return false;
+        }
+    } else {
+        /* Other planes */
+        switch (plane) {
+        case 0x01:
+            return inrange(ch, 0x1D173u, 0x1D17Au);
+        case 0x0E:
+            return inrange(ch, 0xE0000u, 0xE0FFFu);
+        default:
+            return false;
+        }
+    }
+}
+
 void QTextEngine::shapeText(int item) const
 {
     Q_ASSERT(item < layoutData->items.size());
@@ -1514,6 +1560,61 @@ void QTextEngine::shapeText(int item) const
         itemBoundaries.append(0);
         itemBoundaries.append(0);
         itemBoundaries.append(0);
+    }
+
+    // Attempt to work around assertion violation in harfbuzz text shaping.
+    // See https://bugreports.qt.io/browse/QTBUG-89155.
+    for (int k = 0; k < itemBoundaries.size(); k += 3) {
+        const uint item_pos = itemBoundaries[k];
+        const uint item_length =
+            (k + 4 < itemBoundaries.size() ? itemBoundaries[k + 3] : itemLength) - item_pos;
+
+        // Check if the full string part contains only default ignorables.
+        auto ch = reinterpret_cast<const QChar *>(string) + item_pos;
+        const auto end = ch + item_length;
+        for (; ch != end; ++ch) {
+            uint ucs4 = ch->unicode();
+            if (QChar::isHighSurrogate(ucs4) && ch + 1 != end) {
+                uint low = (ch + 1)->unicode();
+                if (QChar::isLowSurrogate(low)) {
+                    // high part never changes in simple casing
+                    ucs4 = QChar::surrogateToUcs4(ucs4, low);
+                    ++ch;
+                }
+            }
+            if (!IsDefaultIgnorable(ucs4)) {
+                break;
+            }
+        }
+
+        const auto allDefaultIgnorables = (ch == end);
+        if (allDefaultIgnorables) {
+            // Make sure harfbuzz will be able to replace those by spaces.
+            const uint engineIdx = itemBoundaries[k + 2];
+            QFontEngine *actualFontEngine = fontEngine;
+            if (actualFontEngine->type() == QFontEngine::Multi) {
+                actualFontEngine = static_cast<QFontEngineMulti *>(fontEngine)->engine(engineIdx);
+            }
+            if (!actualFontEngine->glyphIndex(' ')) {
+                // This is a font without a glyph for space.
+                // If we try to shape an item, containing only default ignorables, with it,
+                // we will end up in Q_UNREACHABLE below, after Q_UNLIKELY(si.num_glyphs == 0).
+                const auto spaceGlyphIndex = fontEngine->glyphIndex(' ');
+                Q_ASSERT(spaceGlyphIndex != 0);
+                const auto goodEngineIdx = (spaceGlyphIndex >> 24);
+                Q_ASSERT(goodEngineIdx != engineIdx);
+
+                uint glyph_pos = itemBoundaries[k + 1];
+                const uint glyph_till =
+                        (k + 5 < itemBoundaries.size() ? itemBoundaries[k + 4] : nGlyphs);
+
+                for (; glyph_pos < glyph_till; ++glyph_pos) {
+                    initialGlyphs.glyphs[glyph_pos] =
+                            (initialGlyphs.glyphs[glyph_pos] & 0x00FFFFFFU) | (goodEngineIdx << 24);
+                }
+                itemBoundaries[k + 2] = goodEngineIdx;
+            }
+        }
     }
 
     if (Q_UNLIKELY(!shapingEnabled)) {
@@ -3074,7 +3175,8 @@ bool QTextEngine::atWordSeparator(int position) const
     case '&':
     case '^':
     case '*':
-    case '\'':
+    // Patch: Make the apostrophe a non-separator for words.
+    //case '\'':
     case '"':
     case '`':
     case '~':
@@ -3085,6 +3187,74 @@ bool QTextEngine::atWordSeparator(int position) const
         break;
     }
     return false;
+}
+
+// Patch: Improved apostrophe processing.
+// We should consider apostrophes as word separators when there is more than
+// one apostrophe in a row, or when the apostrophe is at the beginning or end
+// of the word.
+int QTextEngine::toEdge(int pos, int len, bool isRightDirection) {
+    const auto step = isRightDirection ? 1 : -1;
+    const auto next = isRightDirection ? 0 : -1;
+
+    QCharAttributes *attributes = const_cast<QCharAttributes *>(this->attributes());
+
+    const auto atApostrophe = [&](int position) {
+        return layoutData->string.at(position).unicode() == '\'';
+    };
+
+    const auto atSepOrApost = [&](int position) {
+        return atApostrophe(position) || atWordSeparator(position);
+    };
+
+    const auto inBounds = [&](int position) {
+        return isRightDirection
+            ? position < len
+            : position > 0;
+    };
+
+    const auto atSepOrSpace = [&](int position) {
+        return attributes[position].whiteSpace || atWordSeparator(position);
+    };
+
+    const auto isApostropheInWord = [&](int position) {
+        if (!atApostrophe(position)) {
+            return false;
+        }
+        auto p = position - 1;
+        if (p <= 0 || atSepOrSpace(p)) {
+            return false;
+        }
+        p = position + 1;
+        if (p >= len || atSepOrSpace(p)) {
+            return false;
+        }
+        return true;
+    };
+
+    auto counter = 0;
+    while (inBounds(pos) && atSepOrApost(pos + next)) {
+        counter++;
+        pos += step;
+    }
+    // If it's not the single apostrophe, then that's non-letter part of text.
+    if (counter > 1 || (counter == 1 && !isApostropheInWord(pos - step + next))) {
+        return pos;
+    }
+
+    bool isPrevApostrophe = false;
+    while (inBounds(pos) && !atSepOrSpace(pos + next)) {
+        bool isNextApostrophe = atApostrophe(pos + next);
+        if (isPrevApostrophe && isNextApostrophe) {
+            break;
+        }
+        pos += step;
+        isPrevApostrophe = isNextApostrophe;
+    }
+    if (isPrevApostrophe) {
+        pos += -step;
+    }
+    return pos;
 }
 
 void QTextEngine::setPreeditArea(int position, const QString &preeditText)

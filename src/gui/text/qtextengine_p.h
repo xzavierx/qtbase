@@ -619,6 +619,8 @@ private:
 
 public:
     bool atWordSeparator(int position) const;
+    // Patch: Improved apostrophe processing.
+    int toEdge(int pos, int len, bool isRightDirection);
 
     QString elidedText(Qt::TextElideMode mode, const QFixed &width, int flags = 0, int from = 0, int count = -1) const;
 

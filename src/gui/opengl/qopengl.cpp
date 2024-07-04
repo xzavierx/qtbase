@@ -389,6 +389,12 @@ static bool matches(const QJsonObject &object,
         }
     }
 
+    if (object.value(QLatin1String("multi_gpu_style")).toString() == QLatin1String("amd_switchable")) {
+        if (!gpu.amdSwitchable) {
+            return false;
+        }
+    }
+
     return true;
 }
 

@@ -95,6 +95,8 @@ public:
         QByteArray driverDescription;
         QByteArray glVendor;
 
+        bool amdSwitchable = false;
+
         static Gpu fromDevice(uint vendorId, uint deviceId, QVersionNumber driverVersion, const QByteArray &driverDescription) {
             Gpu gpu;
             gpu.vendorId = vendorId;

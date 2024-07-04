@@ -660,9 +660,11 @@ void QOpenGLWidgetPaintDevice::ensureActiveTarget()
     if (!wd->initialized)
         return;
 
-    if (QOpenGLContext::currentContext() != wd->context)
+    if (QOpenGLContext::currentContext() != wd->context) {
         d->w->makeCurrent();
-    else
+        if (!wd->initialized)
+            return; // Trying to fix a crash on context loss.
+    } else
         wd->fbo->bind();
 
     if (!wd->inPaintGL)
@@ -742,7 +744,11 @@ void QOpenGLWidgetPrivate::recreateFbo()
 
     emit q->aboutToResize();
 
-    context->makeCurrent(surface);
+    if (!context->makeCurrent(surface)) {
+        // Trying to fix a crash on context loss.
+        reset();
+        return;
+    }
 
     delete fbo;
     fbo = nullptr;
@@ -783,6 +789,9 @@ void QOpenGLWidgetPrivate::beginCompose()
     if (flushPending) {
         flushPending = false;
         q->makeCurrent();
+        if (!initialized) {
+            return;
+        }
         static_cast<QOpenGLExtensions *>(context->functions())->flushShared();
     }
     hasBeenComposed = true;
@@ -825,6 +834,7 @@ void QOpenGLWidgetPrivate::initialize()
     }
     if (Q_UNLIKELY(!ctx->create())) {
         qWarning("QOpenGLWidget: Failed to create context");
+        reset();
         return;
     }
 
@@ -855,6 +865,7 @@ void QOpenGLWidgetPrivate::initialize()
 
     if (Q_UNLIKELY(!ctx->makeCurrent(surface))) {
         qWarning("QOpenGLWidget: Failed to make context current");
+        reset();
         return;
     }
 
@@ -873,6 +884,9 @@ void QOpenGLWidgetPrivate::resolveSamples()
     Q_Q(QOpenGLWidget);
     if (resolvedFbo) {
         q->makeCurrent();
+        if (!initialized) {
+            return;
+        }
         QRect rect(QPoint(0, 0), fbo->size());
         QOpenGLFramebufferObject::blitFramebuffer(resolvedFbo, rect, fbo, rect);
         flushPending = true;
@@ -906,6 +920,8 @@ void QOpenGLWidgetPrivate::render()
         return;
 
     q->makeCurrent();
+    if (!initialized)
+        return; // Trying to fix a crash on context loss.
 
     if (updateBehavior == QOpenGLWidget::NoPartialUpdate && hasBeenComposed) {
         invalidateFbo();
@@ -954,14 +970,21 @@ QImage QOpenGLWidgetPrivate::grabFramebuffer()
     if (!fbo) // could be completely offscreen, without ever getting a resize event
         recreateFbo();
 
+    if (!fbo)
+        return QImage(); // Trying to fix a crash on context loss.
+
     if (!inPaintGL)
         render();
 
     if (resolvedFbo) {
         resolveSamples();
+        if (!initialized)
+            return QImage(); // Trying to fix a crash on context loss.
         resolvedFbo->bind();
     } else {
         q->makeCurrent();
+        if (!initialized)
+            return QImage(); // Trying to fix a crash on context loss.
     }
 
     const bool hasAlpha = q->format().hasAlpha();
@@ -1171,7 +1194,12 @@ void QOpenGLWidget::makeCurrent()
     if (!d->initialized)
         return;
 
-    d->context->makeCurrent(d->surface);
+    if (!d->context->makeCurrent(d->surface)) {
+        // Trying to fix a crash on context loss.
+        // If makeCurrent() failed, that means we're not initialized any more.
+        d->initialized = false; // This prevents infinite recursion to makeCurrent().
+        d->reset();
+    }
 
     if (d->fbo) // there may not be one if we are in reset()
         d->fbo->bind();
@@ -1301,6 +1329,9 @@ void QOpenGLWidget::resizeEvent(QResizeEvent *e)
         return;
 
     d->recreateFbo();
+    if (!d->fbo)
+        return; // Trying to fix a crash on context loss.
+
     resizeGL(width(), height());
     d->sendPaintEvent(QRect(QPoint(0, 0), size()));
 }

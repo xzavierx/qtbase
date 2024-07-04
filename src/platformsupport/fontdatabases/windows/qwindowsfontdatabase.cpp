@@ -1710,52 +1710,71 @@ HFONT QWindowsFontDatabase::systemFont()
 
 static const char *other_tryFonts[] = {
     "Arial",
-    "MS UI Gothic",
-    "Gulim",
-    "SimSun",
-    "PMingLiU",
-    "Arial Unicode MS",
+    "Yu Gothic UI",
+    "Meiryo UI",
+    "Yu Gothic",
+    "Meiryo",
+    "Malgun Gothic",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "Microsoft JhengHei UI",
+    "Microsoft JhengHei",
     0
 };
 
 static const char *jp_tryFonts [] = {
     "Yu Gothic UI",
-    "MS UI Gothic",
+    "Meiryo UI",
+    "Yu Gothic",
+    "Meiryo",
     "Arial",
-    "Gulim",
-    "SimSun",
-    "PMingLiU",
-    "Arial Unicode MS",
+    "Malgun Gothic",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "Microsoft JhengHei UI",
+    "Microsoft JhengHei",
     0
 };
 
 static const char *ch_CN_tryFonts [] = {
-    "SimSun",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
     "Arial",
-    "PMingLiU",
-    "Gulim",
-    "MS UI Gothic",
-    "Arial Unicode MS",
+    "Microsoft JhengHei UI",
+    "Microsoft JhengHei",
+    "Malgun Gothic",
+    "Yu Gothic UI",
+    "Meiryo UI",
+    "Yu Gothic",
+    "Meiryo",
     0
 };
 
 static const char *ch_TW_tryFonts [] = {
-    "PMingLiU",
+    "Microsoft JhengHei UI",
+    "Microsoft JhengHei",
     "Arial",
-    "SimSun",
-    "Gulim",
-    "MS UI Gothic",
-    "Arial Unicode MS",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "Malgun Gothic",
+    "Yu Gothic UI",
+    "Meiryo UI",
+    "Yu Gothic",
+    "Meiryo",
     0
 };
 
 static const char *kr_tryFonts[] = {
-    "Gulim",
+    "Malgun Gothic",
     "Arial",
-    "PMingLiU",
-    "SimSun",
-    "MS UI Gothic",
-    "Arial Unicode MS",
+    "Microsoft JhengHei UI",
+    "Microsoft JhengHei",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "Yu Gothic UI",
+    "Meiryo UI",
+    "Yu Gothic",
+    "Meiryo",
     0
 };
 
@@ -1892,6 +1911,10 @@ QStringList QWindowsFontDatabase::extraTryFontsForFamily(const QString &family)
             ++tf;
         }
     }
+    result.append(QStringLiteral("Nirmala UI"));
+    result.append(QStringLiteral("Iskoola Pota"));
+    result.append(QStringLiteral("Ebrima"));
+    result.append(QStringLiteral("Arial Unicode MS"));
     result.append(QStringLiteral("Segoe UI Emoji"));
     result.append(QStringLiteral("Segoe UI Symbol"));
     return result;
@@ -1918,7 +1941,7 @@ QString QWindowsFontDatabase::familyForStyleHint(QFont::StyleHint styleHint)
     default:
         break;
     }
-    return QStringLiteral("MS Shell Dlg 2");
+    return QStringLiteral("Tahoma");
 }
 
 QStringList QWindowsFontDatabase::fallbacksForFamily(const QString &family, QFont::Style style, QFont::StyleHint styleHint, QChar::Script script) const
@@ -2042,7 +2065,7 @@ QFontEngine *QWindowsFontDatabase::createEngine(const QFontDef &request, const Q
 
 QFont QWindowsFontDatabase::systemDefaultFont()
 {
-#if QT_VERSION >= 0x060000
+#if 1
     // Qt 6: Obtain default GUI font (typically "Segoe UI, 9pt", see QTBUG-58610)
     NONCLIENTMETRICS ncm;
     ncm.cbSize = FIELD_OFFSET(NONCLIENTMETRICS, lfMessageFont) + sizeof(LOGFONT);

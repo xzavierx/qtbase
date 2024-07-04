@@ -144,6 +144,10 @@ static inline bool launchMail(const QUrl &url)
             command.prepend(doubleQuote);
         }
     }
+
+    // Patch: Fix mail launch if no param is expected in this command.
+    if (command.indexOf(QStringLiteral("%1")) < 0) return false;
+
     // Pass the url as the parameter. Should use QProcess::startDetached(),
     // but that cannot handle a Windows command line [yet].
     command.replace(QLatin1String("%1"), url.toString(QUrl::FullyEncoded));

@@ -717,6 +717,12 @@ int QTextLayout::nextCursorPosition(int oldPos, CursorMode mode) const
         while (oldPos < len && !attributes[oldPos].graphemeBoundary)
             oldPos++;
     } else {
+        // Patch: Skip to the end of the current word, not to the start of the next one.
+        while (oldPos < len && attributes[oldPos].whiteSpace)
+            oldPos++;
+        // Patch: Improved apostrophe processing.
+        oldPos = d->toEdge(oldPos, len, true);
+#if 0
         if (oldPos < len && d->atWordSeparator(oldPos)) {
             oldPos++;
             while (oldPos < len && d->atWordSeparator(oldPos))
@@ -727,6 +733,7 @@ int QTextLayout::nextCursorPosition(int oldPos, CursorMode mode) const
         }
         while (oldPos < len && attributes[oldPos].whiteSpace)
             oldPos++;
+#endif
     }
 
     return oldPos;
@@ -756,6 +763,9 @@ int QTextLayout::previousCursorPosition(int oldPos, CursorMode mode) const
         while (oldPos > 0 && attributes[oldPos - 1].whiteSpace)
             oldPos--;
 
+        // Patch: Improved apostrophe processing.
+        oldPos = d->toEdge(oldPos, len, false);
+#if 0
         if (oldPos && d->atWordSeparator(oldPos-1)) {
             oldPos--;
             while (oldPos && d->atWordSeparator(oldPos-1))
@@ -764,6 +774,7 @@ int QTextLayout::previousCursorPosition(int oldPos, CursorMode mode) const
             while (oldPos > 0 && !attributes[oldPos - 1].whiteSpace && !d->atWordSeparator(oldPos-1))
                 oldPos--;
         }
+#endif
     }
 
     return oldPos;
@@ -1336,10 +1347,13 @@ void QTextLayout::drawCursor(QPainter *p, const QPointF &pos, int cursorPosition
     bool rightToLeft = d->isRightToLeft();
     if (itm >= 0) {
         const QScriptItem &si = d->layoutData->items.at(itm);
+        // Patch: Use line geometry, otherwise smiles get glitching cursor.
+#if 0
         if (si.ascent >= 0)
             base = si.ascent;
         if (si.descent >= 0)
             descent = si.descent;
+#endif
         rightToLeft = si.analysis.bidiLevel % 2;
     }
     qreal y = position.y() + (sl.y + sl.base() + sl.descent - base - descent).toReal();
@@ -2100,6 +2114,10 @@ found:
     }
 
     if (hasInlineObject && eng->block.docHandle()) {
+        // Patch: Attempt to fix inline objects without text in line.
+        if (!line.height()) {
+            line.setDefaultHeight(eng);
+        }
         // position top/bottom aligned inline objects
         if (maxInlineObjectHeight > line.ascent + line.descent) {
             // extend line height if required
